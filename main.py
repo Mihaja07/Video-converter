@@ -15,7 +15,8 @@ class Tool(QWidget):
     def __init__(self):
         super().__init__()
         self.initData()
-        self.initUI()
+        if self.check_ffmpeg():
+            self.initUI()
         self.apply_style()
         self.setWindowTitle("Video converter")
         self.setWindowIcon(QIcon("images/icon.ico"))
@@ -105,6 +106,23 @@ class Tool(QWidget):
         layout.addWidget(self.reuse_settings_chb)
         layout.addWidget(self.convert_btn)
     
+    def check_ffmpeg(self):
+        try:
+            output = subprocess.run(['blender', '-version'], capture_output=True)
+            print(output.stdout)
+            if re.search('ffmpeg version', str(output.stdout)):
+                return True
+            else:
+                raise Exception
+        except:
+            layout = QVBoxLayout(self)
+            label = QLabel("ffmpeg is not installed or not in PATH")
+            button = QPushButton("OK")
+            button.clicked.connect(self.close)
+            layout.addWidget(label)
+            layout.addWidget(button)
+            return False
+
     def set_resolution_duration(self, file):
         resolution, self.duration = self.get_info(file)
         if resolution not in self.resolution_opt:
