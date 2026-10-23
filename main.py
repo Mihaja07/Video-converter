@@ -213,6 +213,14 @@ class Tool(QWidget):
         self.convert_thread.started.connect(self.worker.run)
 
         self.convert_thread.start()
+    
+    def closeEvent(self, a0):
+        if self.converting:
+            try:
+                self.worker.kill()
+            except ValueError:
+                pass
+        return super().closeEvent(a0)
 
 
 class ConvertWorker(QObject):
