@@ -1,7 +1,10 @@
 from PyQt5.QtWidgets import (QApplication, QWidget, QLineEdit, QLabel, QPushButton, QComboBox,
                              QHBoxLayout, QVBoxLayout, QProgressBar, QSpinBox, QCheckBox, QFileDialog)
+from PyQt5.QtCore import QThread, QObject, pyqtSignal
 from data import Data
 import subprocess
+import datetime
+import psutil
 import sys
 import re
 import os
@@ -19,6 +22,7 @@ class Tool(QWidget):
         self.data.get('input', os.path.join('C:/Users', os.getlogin(), 'Videos/').replace('\\', '/'))
         self.data.get('output', os.path.join('C:/Users', os.getlogin(), 'Videos/').replace('\\', '/'))
         self.files_selected = []
+        self.converting = False
     
     def initUI(self):
         def on_keep_res_state_changed(state):
@@ -151,7 +155,121 @@ class Tool(QWidget):
             self.output_field.setText(path)
 
     def convert(self):
-        pass
+        def finished():
+            self.convert_btn.setEnabled(1)
+            self.convert_btn.setText("Convert")
+            self.convert_thread.started.disconnect()
+            self.worker.progress_signal.disconnect()
+            self.worker.info_signal.disconnect()
+            self.worker.finished_signal.disconnect()
+            self.worker.deleteLater()
+            self.convert_thread.quit()
+            if not self.convert_thread.wait(250):
+                self.convert_thread.terminate()
+                self.convert_thread.wait()
+            self.convert_thread.deleteLater()
+            self.convert()
+
+        def change_convert_btn(file:str):
+            filename = file[file.rfind('/')+1:file.rfind('.')]
+            if len(filename) > 16:
+                filename = "..."+filename[-15:].strip()
+            self.convert_btn.setText('Convert   "'+filename+'"')
+            self.convert_btn.setToolTip(file)
+        
+        try:
+            if self.converting:
+                self.input_field.setText(f"{len(self.files_selected)} files remaining")
+                file = self.files_selected[0]
+                change_convert_btn(file)
+                if self.keep_resolution_chb.isChecked():
+                    self.set_resolution_duration(file)
+                if self.reuse_settings_chb.isChecked():
+                    self.files_selected.pop(0)
+                    self.converting = True
+                else:
+                    self.converting = False
+                    return 0
+            else:
+                file = self.files_selected.pop(0)
+                self.input_field.setText(f"{len(self.files_selected)} files remaining")
+                self.converting = True
+        except IndexError:
+            self.input_field.setText("0 files selected")
+            self.convert_btn.setText("Convert")
+            self.convert_btn.setToolTip("Start converting the video to mp4 with ffmpeg")
+            self.files_selected = []
+            self.converting = False
+            return 0
+        self.convert_btn.setText("Converting...")
+        self.convert_btn.setDisabled(1)
+        self.convert_thread = QThread()
+        self.worker = ConvertWorker(file, self.duration)
+        self.worker.moveToThread(self.convert_thread)
+
+        self.worker.progress_signal.connect(self.progress_bar.setValue)
+        self.worker.info_signal.connect(self.status_lb.setText)
+        self.worker.finished_signal.connect(finished)
+        self.convert_thread.started.connect(self.worker.run)
+
+        self.convert_thread.start()
+
+
+class ConvertWorker(QObject):
+    progress_signal = pyqtSignal(int)
+    info_signal = pyqtSignal(str)
+    finished_signal = pyqtSignal()
+
+    def __init__(self, file:str, duration:str):
+        super().__init__()
+        self.data = Data()
+        self.file = file
+        self.duration = duration
+    
+    def kill(self):
+        self.proc.kill()
+    
+    def run(self):
+        def get_progress(time):
+
+            time_fmt = "%H:%M:%S"
+            current = datetime.datetime.strptime(time, time_fmt) - datetime.datetime.strptime('00:00:00', time_fmt)
+            total = datetime.datetime.strptime(self.duration, time_fmt) - datetime.datetime.strptime('00:00:00', time_fmt)
+            
+            return remap(current.total_seconds(), 0, total.total_seconds())
+
+        new_name = self.data.get('output') + self.file[self.file.rfind('/'):self.file.rfind('.')] + "_converted" + ".mp4"
+        if os.path.isfile(new_name):
+            i = 0
+            while os.path.isfile(self.data.get('output') + self.file[self.file.rfind('/'):self.file.rfind('.')] + f"_converted-{i}" + ".mp4"):
+                i += 1
+            new_name = self.data.get('output') + self.file[self.file.rfind('/'):self.file.rfind('.')] + f"_converted-{i}" + ".mp4"
+        
+        self.proc = subprocess.Popen(["ffmpeg", "-i", self.file, "-vf", "scale="+self.data.get('resolution').replace('x', ':'), "-vcodec", "libx264", "-crf", str(self.data.get('compression')), new_name], stderr=subprocess.PIPE, text=True, bufsize=1)
+        
+        for line in self.proc.stderr:
+            time = re.search(r"time=\d\d:\d\d:\d\d.\d\d", line)
+            fps = re.search(r"fps=......", line)
+            if None not in (time, fps):
+                time = time.group(0)[5:13].strip()
+                self.progress_signal.emit(get_progress(time))
+                fps = fps.group(0)[4:fps.group(0).find('q')-1].strip()
+                cpu = psutil.cpu_percent()
+                self.info_signal.emit(f"fps: {fps}  cpu:{cpu}%")
+        self.proc.wait()
+        self.info_signal.emit(f"fps: 0  cpu: 0.0%")
+        self.finished_signal.emit()
+        self.progress_signal.emit(0)
+
+def remap(value, fromMin, fromMax, toMin=0, toMax=100):
+    """Remap a value, used for the progress bar"""
+    try:
+        oldRange = fromMax - fromMin
+        newRange = toMax - toMin
+        ratio = (value-fromMin) / oldRange
+        return int(toMin + (ratio*newRange))
+    except:
+        return toMax
 
 app = QApplication(sys.argv)
 window = Tool()
