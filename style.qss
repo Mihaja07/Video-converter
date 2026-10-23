@@ -1,0 +1,170 @@
+QWidget{
+    background: #201d2e;
+    color: white;
+}
+
+
+QProgressBar{
+    background: #16001f;
+    text-align: center;
+    border: 1px solid #2f3446;
+    border-radius: 4px;
+}
+QProgressBar::chunk{
+    margin: 2px;
+    border: 1px solid #2c0c49;
+    border-radius: 2px;
+    background: qlineargradient(x1:0, y1:.5, x2:1, y2:.5, stop:0 #431270, stop:1 #09a0c5);
+}
+
+
+QPushButton{
+    background: #16001f;
+    padding: 7px;
+    border: 1px solid #431270;
+    border-radius: 10px;
+}
+QPushButton:hover{
+    background: #260035;
+    border-radius: 12px;
+}
+QPushButton:pressed{
+    background: #0a000e;
+}
+QPushButton:disabled{
+    color: #555555;
+    border: 1px solid #555555;
+    background: #2a2a3f;
+}
+
+
+QLineEdit{
+    background: #10102b;
+    padding: 5px;
+    border: 1px solid #09a0c5;
+    border-radius: 10px;
+}
+
+
+QCheckBox::indicator{
+    border: 1px solid #431270;
+    border-radius: 4px;
+    width: 10px;
+    height: 10px;
+}
+QCheckBox::indicator:checked{
+    image: url(images/check.png)
+}
+QCheckBox::indicator:unchecked{
+    background: #10102b;
+}
+QCheckBox::indicator:hover{
+    background: #060616;
+}
+
+
+QComboBox{
+    margin: 2px;
+    padding: 5px;
+    border: 1px solid #09a0c5;
+    border-radius: 8px;
+}
+QComboBox:disabled{
+    background: #1e1c27;
+    border-width: 2px;
+    color: #575757;
+    border-color: #18181f;
+}
+QComboBox:hover{
+    background: #05051a;
+    border-radius: 10px;
+}
+QComboBox::drop-down{
+        subcontrol-origin: padding;
+        subcontrol-position: top right;
+        border: none;
+        background: transparent;
+}
+QComboBox::down-arrow{
+    image: url(images/down-arrow.png);
+    background: transparent;
+    width: 10;
+    height: 10;
+}
+QComboBox::down-arrow:disabled{
+    image: url(images/down-arrow-disabled.png);
+}
+QComboBox QAbstractItemView{
+    border: 1px solid #09a0c5;
+    border-radius: 5px;
+    background: transparent
+}
+
+
+QSpinBox{
+    padding: 5px;
+    border: 1px solid #09a0c5;
+    border-radius: 8px;
+}
+QSpinBox:disabled{
+    border: 1px solid #555555;
+    background: #2a2a3f;
+}
+QSpinBox::up-button{
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    border-right: 1px solid #09a0c5;
+    border-top: 1px solid #09a0c5;
+    border-top-right-radius: 8px;
+    background: transparent;
+}
+QSpinBox::down-button{
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    border-right: 1px solid #09a0c5;
+    border-bottom: 1px solid #09a0c5;
+    border-bottom-right-radius: 8px;
+    background: transparent;
+}
+
+QSpinBox::up-button:hover{
+    border-top-right-radius: 4px;
+    background: #05051a;
+}
+QSpinBox::down-button:hover{
+    border-bottom-right-radius: 4px;
+    background: #05051a;
+}
+QSpinBox::up-button:disabled{
+    border-top: 1px solid #555555;
+    border-right: 1px solid #555555;
+}
+QSpinBox::down-button:disabled{
+    border-right: 1px solid #555555;
+    border-bottom: 1px solid #555555;
+}
+
+QSpinBox::up-arrow{
+    padding-right: 8px;
+    padding-left: 5px;
+    padding-top: 2px;
+    width: 10;
+    height: 10;
+    image: url(images/up-arrow.png);
+    background: transparent;
+}
+QSpinBox::up-arrow:disabled{
+    image: url(images/up-arrow-disabled.png);
+}
+QSpinBox::down-arrow{
+    padding-right: 8px;
+    padding-left: 5px;
+    padding-bottom: 2px;
+    width: 10;
+    height: 10;
+    image: url(images/down-arrow.png);
+    background: transparent;
+}
+QSpinBox::down-arrow:disabled{
+    image: url(images/down-arrow-disabled.png);
+}

@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import (QApplication, QWidget, QLineEdit, QLabel, QPushButton, QComboBox,
                              QHBoxLayout, QVBoxLayout, QProgressBar, QSpinBox, QCheckBox, QFileDialog)
 from PyQt5.QtCore import QThread, QObject, pyqtSignal
+from PyQt5.QtGui import QIcon
 from data import Data
 import subprocess
 import datetime
@@ -15,6 +16,9 @@ class Tool(QWidget):
         super().__init__()
         self.initData()
         self.initUI()
+        self.apply_style()
+        self.setWindowTitle("Video converter")
+        self.setWindowIcon(QIcon("images/icon.ico"))
         self.show()
     
     def initData(self):
@@ -221,6 +225,13 @@ class Tool(QWidget):
             except ValueError:
                 pass
         return super().closeEvent(a0)
+
+    def apply_style(self):
+        try:
+            with open("style.qss", "r") as file:
+                self.setStyleSheet(file.read())
+        except:
+            pass
 
 
 class ConvertWorker(QObject):
