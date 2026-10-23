@@ -1,7 +1,9 @@
 from PyQt5.QtWidgets import (QApplication, QWidget, QLineEdit, QLabel, QPushButton, QComboBox,
-                             QHBoxLayout, QVBoxLayout, QProgressBar, QSpinBox, QCheckBox)
+                             QHBoxLayout, QVBoxLayout, QProgressBar, QSpinBox, QCheckBox, QFileDialog)
 from data import Data
+import subprocess
 import sys
+import re
 import os
 
 
@@ -19,6 +21,21 @@ class Tool(QWidget):
         self.files_selected = []
     
     def initUI(self):
+        def on_keep_res_state_changed(state):
+            self.resolution_cbx.setDisabled(bool(state))
+            self.data.save('keep_resolution', bool(state))
+        def on_reuse_param_state_changed(state):
+            self.data.save('reuse_parameters', state)
+            if self.files_selected:
+                filename = self.files_selected[0][self.files_selected[0].rfind('/')+1:self.files_selected[0].rfind('.')]
+                if len(filename) > 16:
+                    filename = "..."+filename[-15:].strip()
+                if state:
+                    self.convert_btn.setText('Convert   all')
+                else:
+                    self.convert_btn.setText('Convert   "'+filename+'"')
+                self.convert_btn.setToolTip(self.files_selected[0])
+
         layout = QVBoxLayout(self)
 
         input_layout = QHBoxLayout()
@@ -54,12 +71,14 @@ class Tool(QWidget):
         self.resolution_cbx.setDisabled(self.data.get('keep_resolution', False))
         self.keep_resolution_chb = QCheckBox("Keep resolution")
         self.keep_resolution_chb.setChecked(self.data.get('keep_resolution', False))
+        self.keep_resolution_chb.stateChanged.connect(on_keep_res_state_changed)
 
         self.progress_bar = QProgressBar(self)
         self.progress_bar.setValue(0)
         self.status_lb = QLabel("fps: 0  cpu: 0.0%")
         self.reuse_settings_chb = QCheckBox("Use the same parameters for every videos")
         self.reuse_settings_chb.setChecked(self.data.get('reuse_parameters', True))
+        self.reuse_settings_chb.clicked.connect(on_reuse_param_state_changed)
         self.convert_btn = QPushButton("Convert")
         self.convert_btn.setToolTip("Start converting the video to mp4 with ffmpeg")
         self.convert_btn.clicked.connect(self.convert)
@@ -77,12 +96,59 @@ class Tool(QWidget):
         layout.addWidget(self.progress_bar)
         layout.addWidget(self.reuse_settings_chb)
         layout.addWidget(self.convert_btn)
+    
+    def set_resolution_duration(self, file):
+        resolution, self.duration = self.get_info(file)
+        if resolution not in self.resolution_opt:
+            self.resolution_cbx.addItem(resolution)
+        self.resolution_cbx.setCurrentText(resolution)
 
     def open(self):
-        pass
+        files = QFileDialog.getOpenFileNames(self, "Open files", self.data.get('input'), """Video files (*.mp4;*.avi;*.mkv;*.3gp)""")[0]
+        if files:
+            self.data.save('input', self.get_path(files[0]))
+            self.data.save('output', self.get_path(files[0]))
+            self.output_field.setText(self.get_path(files[0]))
+            self.input_field.setText(f"{len(files)} files selected")
+            self.files_selected = files
+            self.set_resolution_duration(files[0])
+            filename = files[0][files[0].rfind('/')+1:files[0].rfind('.')]
+            if len(filename) > 16:
+                filename = "..."+filename[-15:].strip()
+            if self.reuse_settings_chb.isChecked():
+                self.convert_btn.setText('Convert   all')
+            else:
+                self.convert_btn.setText('Convert   "'+filename+'"')
+            self.convert_btn.setToolTip(files[0])
+        else:
+            self.files_selected = []
+            self.input_field.setText("0 files selected")
+    
+    def get_info(self, file:str):
+        """Return (resolution, duration)"""
+        info = subprocess.run(['ffmpeg', '-i', file], capture_output=True)
+        for pattern in [r"\d\d\d\dx\d\d\d\d", r"\d\d\dx\d\d\d\d", r"\d\d\d\dx\d\d\d", r"\d\d\dx\d\d\d"]:
+            resolution = re.search(pattern, str(info.stderr))
+            if resolution:
+                resolution = resolution.group(0).strip()
+                break
+
+        duration = re.search(r"Duration: \d\d:\d\d:\d\d.\d\d", str(info.stderr))
+        if duration is not None:
+            duration = duration.group(0)[10:18].strip()
+
+        return (resolution, duration)
+
+    def get_path(self, file:str):
+        file = file.replace('\\', '/')
+        path = file[:file.rfind('/')]
+        return path
     
     def change_output(self):
-        pass
+        path = QFileDialog.getExistingDirectory(self, "Change output", self.data.get('output'))
+        if path:
+            self.data.save('output', path)
+            self.output_field.setText(path)
 
     def convert(self):
         pass
