@@ -1,11 +1,10 @@
 from PyQt5.QtWidgets import (QApplication, QWidget, QLineEdit, QLabel, QPushButton, QComboBox,
                              QHBoxLayout, QVBoxLayout, QProgressBar, QSpinBox, QCheckBox, QFileDialog)
-from PyQt5.QtCore import QThread, QObject, pyqtSignal
+from PyQt5.QtCore import QThread, QObject, pyqtSignal, Qt, QTimer
 from PyQt5.QtGui import QIcon
 from data import Data
 import subprocess
 import datetime
-import psutil
 import sys
 import re
 import os
@@ -15,12 +14,11 @@ class Tool(QWidget):
     def __init__(self):
         super().__init__()
         self.initData()
-        if self.check_ffmpeg():
-            self.initUI()
         self.apply_style()
+        self.resize(300, 400)
+        self.spalsh_screen()
         self.setWindowTitle("Video converter")
         self.setWindowIcon(QIcon("images/icon.ico"))
-        self.show()
     
     def initData(self):
         self.data = Data()
@@ -60,17 +58,18 @@ class Tool(QWidget):
         output_layout = QHBoxLayout()
         self.output_field = QLineEdit()
         self.output_field.setText(self.data.get('output'))
+        self.output_field.setToolTip(self.data.get('output'))
         self.output_field.setReadOnly(True)
         output_btn = QPushButton("Change")
         output_btn.clicked.connect(self.change_output)
         output_layout.addWidget(self.output_field)
         output_layout.addWidget(output_btn)
 
-        compression_cbx = QSpinBox()
-        compression_cbx.setRange(10, 40)
-        compression_cbx.setValue(self.data.get('compression', 28))
-        compression_cbx.setToolTip("The higher the compression, the smaller the file")
-        compression_cbx.valueChanged.connect(lambda x: self.data.save('compression', x))
+        quality_cbx = QSpinBox()
+        quality_cbx.setRange(1, 51)
+        quality_cbx.setValue(self.data.get('quality', 30))
+        quality_cbx.setToolTip("Higher quality outputs smaller files\n28 good, 51 worst")
+        quality_cbx.valueChanged.connect(lambda x: self.data.save('quality', x))
         self.resolution_cbx = QComboBox()
         self.resolution_opt = ["1920x1080", "1366x768", "1280x720", "960x540", "850x480", "640x360"]
         self.resolution_cbx.addItems(self.resolution_opt)
@@ -84,7 +83,7 @@ class Tool(QWidget):
 
         self.progress_bar = QProgressBar(self)
         self.progress_bar.setValue(0)
-        self.status_lb = QLabel("fps: 0  cpu: 0.0%")
+        self.status_lb = QLabel("fps: 0")
         self.reuse_settings_chb = QCheckBox("Use the same parameters for every videos")
         self.reuse_settings_chb.setChecked(self.data.get('reuse_parameters', True))
         self.reuse_settings_chb.clicked.connect(on_reuse_param_state_changed)
@@ -94,9 +93,9 @@ class Tool(QWidget):
 
         layout.addWidget(QLabel("File:"))
         layout.addLayout(input_layout)
-        layout.addWidget(QLabel("Compression:"))
-        layout.addWidget(compression_cbx)
-        layout.addWidget(QLabel("resolution:"))
+        layout.addWidget(QLabel("Quality:"))
+        layout.addWidget(quality_cbx)
+        layout.addWidget(QLabel("Resolution:"))
         layout.addWidget(self.keep_resolution_chb)
         layout.addWidget(self.resolution_cbx)
         layout.addWidget(QLabel("Output:"))
@@ -106,18 +105,44 @@ class Tool(QWidget):
         layout.addWidget(self.reuse_settings_chb)
         layout.addWidget(self.convert_btn)
     
-    def check_ffmpeg(self):
-        try:
-            subprocess.run(['ffmpeg', '-version'])
-            return True
-        except:
-            layout = QVBoxLayout(self)
-            label = QLabel("ffmpeg is not installed or not in PATH")
-            button = QPushButton("OK")
-            button.clicked.connect(self.close)
-            layout.addWidget(label)
-            layout.addWidget(button)
-            return False
+    def spalsh_screen(self):
+        def checked(ffmpeg):
+            self.timer.stop()
+            QWidget().setLayout(self.layout())
+            if not ffmpeg:
+                layout = QVBoxLayout(self)
+                label = QLabel("ffmpeg is not installed or not in PATH\n\nDownload it at https://ffmpeg.org/download.html")
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                button = QPushButton("OK")
+                button.clicked.connect(self.close)
+                layout.addWidget(label)
+                layout.addWidget(button)
+            else:
+                self.initUI()
+        
+        def loading():
+            if self.checking_label.text() == "Loading ...":
+                self.checking_label.setText("Loading .")
+                self.checking_label.show()
+            elif self.checking_label.text() == "Loading ..":
+                self.checking_label.setText("Loading ...")
+            elif self.checking_label.text() == "Loading .":
+                self.checking_label.setText("Loading ..")
+
+        layout = QVBoxLayout(self)
+        self.checking_label = QLabel("Loading ...")
+        self.timer = QTimer()
+        self.timer.timeout.connect(loading)
+        self.timer.start(500)
+        layout.addWidget(self.checking_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.show()
+
+        self.checking_thread = QThread()
+        self.checking_worker = CheckFFMPEG()
+        self.checking_worker.moveToThread(self.checking_thread)
+        self.checking_thread.started.connect(self.checking_worker.run)
+        self.checking_worker.finished.connect(checked)
+        self.checking_thread.start()
 
     def set_resolution_duration(self, file):
         resolution, self.duration = self.get_info(file)
@@ -132,6 +157,7 @@ class Tool(QWidget):
             self.data.save('output', self.get_path(files[0]))
             self.output_field.setText(self.get_path(files[0]))
             self.input_field.setText(f"{len(files)} files selected")
+            self.input_field.setToolTip(self.get_path(files[0]))
             self.files_selected = files
             self.set_resolution_duration(files[0])
             filename = files[0][files[0].rfind('/')+1:files[0].rfind('.')]
@@ -171,6 +197,7 @@ class Tool(QWidget):
         if path:
             self.data.save('output', path)
             self.output_field.setText(path)
+            self.output_field.setToolTip(path)
 
     def convert(self):
         def finished():
@@ -197,7 +224,7 @@ class Tool(QWidget):
         
         try:
             if self.converting:
-                self.input_field.setText(f"{len(self.files_selected)} files remaining")
+                self.input_field.setText(f"{len(self.files_selected)+1} files remaining")
                 file = self.files_selected[0]
                 change_convert_btn(file)
                 if self.keep_resolution_chb.isChecked():
@@ -210,7 +237,7 @@ class Tool(QWidget):
                     return 0
             else:
                 file = self.files_selected.pop(0)
-                self.input_field.setText(f"{len(self.files_selected)} files remaining")
+                self.input_field.setText(f"{len(self.files_selected)+1} files remaining")
                 self.converting = True
         except IndexError:
             self.input_field.setText("0 files selected")
@@ -247,6 +274,27 @@ class Tool(QWidget):
         except:
             pass
 
+class CheckFFMPEG(QObject):
+    finished = pyqtSignal(bool)
+    def __init__(self):
+        super().__init__()
+    
+    def run(self):
+        def check_encode(encode):
+            cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=256x256:d=0.1", "-c:v", encode, "-f", "null", "-"]
+            return subprocess.run(cmd, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW).returncode == 0
+        try:
+            encode = ["h264_nvenc", "h264_qsv", "h264_amf", "libx264"]      #NVIDIA   INTEL   AMD   CPU
+            cmd = [["-rc", "vbr", "-b:v", "0", "-cq"], ["-look_ahead", "1", "-global_quality"], ["-rc", "-qvbr", "-qvbr_quality_level"], ["-crf"]]       #Quality
+            for i in encode:
+                if check_encode(i):
+                    Data().save("encode", i)
+                    Data().save("quality_cmd", cmd[encode.index(i)])
+                    break
+
+            self.finished.emit(True)
+        except FileNotFoundError:
+            self.finished.emit(False)
 
 class ConvertWorker(QObject):
     progress_signal = pyqtSignal(int)
@@ -278,19 +326,25 @@ class ConvertWorker(QObject):
                 i += 1
             new_name = self.data.get('output') + self.file[self.file.rfind('/'):self.file.rfind('.')] + f"_converted-{i}" + ".mp4"
         
-        self.proc = subprocess.Popen(["ffmpeg", "-i", self.file, "-vf", "scale="+self.data.get('resolution').replace('x', ':'), "-vcodec", "libx264", "-crf", str(self.data.get('compression')), new_name], stderr=subprocess.PIPE, text=True, bufsize=1)
+        self.proc = subprocess.Popen(["ffmpeg", "-i", self.file, "-vf", "scale="+self.data.get('resolution').replace('x', ':'), "-c:v", Data().get("encode")]+self.data.get('quality_cmd')+[str(self.data.get('quality')), new_name],
+                                     stderr=subprocess.PIPE, text=True, bufsize=1, creationflags=subprocess.CREATE_NO_WINDOW)
         
-        for line in self.proc.stderr:
-            time = re.search(r"time=\d\d:\d\d:\d\d.\d\d", line)
-            fps = re.search(r"fps=......", line)
-            if None not in (time, fps):
-                time = time.group(0)[5:13].strip()
-                self.progress_signal.emit(get_progress(time))
-                fps = fps.group(0)[4:fps.group(0).find('q')-1].strip()
-                cpu = psutil.cpu_percent()
-                self.info_signal.emit(f"fps: {fps}  cpu:{cpu}%")
+        while True:
+            try:
+                for line in self.proc.stderr:
+                    time = re.search(r"time=\d\d:\d\d:\d\d.\d\d", line)
+                    fps = re.search(r"fps=......", line)
+                    if None not in (time, fps):
+                        time = time.group(0)[5:13].strip()
+                        self.progress_signal.emit(get_progress(time))
+                        fps = fps.group(0)[4:fps.group(0).find('q')-1].strip()
+                        self.info_signal.emit(f"fps: {fps}")
+                break
+            except UnicodeDecodeError:
+                continue
+
         self.proc.wait()
-        self.info_signal.emit(f"fps: 0  cpu: 0.0%")
+        self.info_signal.emit(f"fps: 0")
         self.finished_signal.emit()
         self.progress_signal.emit(0)
 

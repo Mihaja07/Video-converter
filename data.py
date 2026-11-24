@@ -2,7 +2,7 @@ import json
 
 class Data:
     def __init__(self):
-        self.data = self._load() #A dictionary
+        self._load() #A dictionary
 
     def _load(self) -> dict:
         """Load data from the file data.json"""
@@ -24,12 +24,13 @@ class Data:
 
     def save(self, key, data):
         """Save the data with the key, if key already exists, data is overwritten"""
+        self.data = self._load()
         self.data[key] = data
         self._dump()
 
     def get(self, key, default = None):
-        """Get data with the key, store default if key doesn't exist"""
-        data = self.data.get(key)
+        """Get data with the key, return and store default if key doesn't exist"""
+        data = self._load().get(key)
         if data is None:
             data = default
             self.save(key, data)
