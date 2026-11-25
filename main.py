@@ -274,7 +274,6 @@ class Tool(QWidget):
         except:
             pass
 
-
 class CheckFFMPEG(QObject):
     finished = pyqtSignal(bool)
     def __init__(self):
