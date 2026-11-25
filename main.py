@@ -274,27 +274,6 @@ class Tool(QWidget):
         except:
             pass
 
-class CheckFFMPEG(QObject):
-    finished = pyqtSignal(bool)
-    def __init__(self):
-        super().__init__()
-    
-    def run(self):
-        def check_encode(encode):
-            cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=256x256:d=0.1", "-c:v", encode, "-f", "null", "-"]
-            return subprocess.run(cmd, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW).returncode == 0
-        try:
-            encode = ["h264_nvenc", "h264_qsv", "h264_amf", "libx264"]      #NVIDIA   INTEL   AMD   CPU
-            cmd = [["-rc", "vbr", "-b:v", "0", "-cq"], ["-look_ahead", "1", "-global_quality"], ["-rc", "-qvbr", "-qvbr_quality_level"], ["-crf"]]       #Quality
-            for i in encode:
-                if check_encode(i):
-                    Data().save("encode", i)
-                    Data().save("quality_cmd", cmd[encode.index(i)])
-                    break
-
-            self.finished.emit(True)
-        except FileNotFoundError:
-            self.finished.emit(False)
 
 class ConvertWorker(QObject):
     progress_signal = pyqtSignal(int)
@@ -326,8 +305,7 @@ class ConvertWorker(QObject):
                 i += 1
             new_name = self.data.get('output') + self.file[self.file.rfind('/'):self.file.rfind('.')] + f"_converted-{i}" + ".mp4"
         
-        self.proc = subprocess.Popen(["ffmpeg", "-i", self.file, "-vf", "scale="+self.data.get('resolution').replace('x', ':'), "-c:v", Data().get("encode")]+self.data.get('quality_cmd')+[str(self.data.get('quality')), new_name],
-                                     stderr=subprocess.PIPE, text=True, bufsize=1, creationflags=subprocess.CREATE_NO_WINDOW)
+        self.proc = subprocess.Popen(["ffmpeg", "-i", self.file, "-vf", "scale="+self.data.get('resolution').replace('x', ':'), "-vcodec", "libx264", "-crf", str(self.data.get('compression')), new_name], stderr=subprocess.PIPE, text=True, bufsize=1)
         
         while True:
             try:
