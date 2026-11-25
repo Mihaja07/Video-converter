@@ -83,7 +83,7 @@ class Tool(QWidget):
 
         self.progress_bar = QProgressBar(self)
         self.progress_bar.setValue(0)
-        self.status_lb = QLabel("fps: 0")
+        self.status_lb = QLabel("fps: 0      elapsed: 0:00:00.00")
         self.reuse_settings_chb = QCheckBox("Use the same parameters for every videos")
         self.reuse_settings_chb.setChecked(self.data.get('reuse_parameters', True))
         self.reuse_settings_chb.clicked.connect(on_reuse_param_state_changed)
@@ -174,7 +174,7 @@ class Tool(QWidget):
     
     def get_info(self, file:str):
         """Return (resolution, duration)"""
-        info = subprocess.run(['ffmpeg', '-i', file], capture_output=True)
+        info = subprocess.run(['ffmpeg', '-i', file], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
         for pattern in [r"\d\d\d\dx\d\d\d\d", r"\d\d\dx\d\d\d\d", r"\d\d\d\dx\d\d\d", r"\d\d\dx\d\d\d"]:
             resolution = re.search(pattern, str(info.stderr))
             if resolution:
@@ -274,6 +274,7 @@ class Tool(QWidget):
         except:
             pass
 
+
 class CheckFFMPEG(QObject):
     finished = pyqtSignal(bool)
     def __init__(self):
@@ -334,11 +335,14 @@ class ConvertWorker(QObject):
                 for line in self.proc.stderr:
                     time = re.search(r"time=\d\d:\d\d:\d\d.\d\d", line)
                     fps = re.search(r"fps=......", line)
+                    elapsed = re.search(r"elapsed=..........", line)
                     if None not in (time, fps):
                         time = time.group(0)[5:13].strip()
                         self.progress_signal.emit(get_progress(time))
                         fps = fps.group(0)[4:fps.group(0).find('q')-1].strip()
-                        self.info_signal.emit(f"fps: {fps}")
+                        elapsed = elapsed.group(0)[8:]
+                        self.info_signal.emit(f"fps: {fps}      elapsed: {elapsed}")
+                    print(line)
                 break
             except UnicodeDecodeError:
                 continue
