@@ -90,6 +90,8 @@ class Tool(QWidget):
         self.convert_btn = QPushButton("Convert")
         self.convert_btn.setToolTip("Start converting the video to mp4 with ffmpeg")
         self.convert_btn.clicked.connect(self.convert)
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.clicked.connect(self.cancel_task)
 
         layout.addWidget(QLabel("File:"))
         layout.addLayout(input_layout)
@@ -104,6 +106,9 @@ class Tool(QWidget):
         layout.addWidget(self.progress_bar)
         layout.addWidget(self.reuse_settings_chb)
         layout.addWidget(self.convert_btn)
+        layout.addWidget(self.cancel_btn)
+
+        self.cancel_btn.hide()
     
     def spalsh_screen(self):
         def checked(ffmpeg):
@@ -246,7 +251,8 @@ class Tool(QWidget):
             self.files_selected = []
             self.converting = False
             return 0
-        self.convert_btn.setText("Converting...")
+        self.convert_btn.hide()
+        self.cancel_btn.show()
         self.convert_btn.setDisabled(1)
         self.convert_thread = QThread()
         self.worker = ConvertWorker(file, self.duration)
@@ -258,7 +264,13 @@ class Tool(QWidget):
         self.convert_thread.started.connect(self.worker.run)
 
         self.convert_thread.start()
+        self.input_field.deselect()
     
+    def cancel_task(self):
+        self.worker.kill()
+        self.convert_btn.show()
+        self.cancel_btn.hide()
+
     def closeEvent(self, a0):
         if self.converting:
             try:
@@ -303,6 +315,7 @@ class ConvertWorker(QObject):
 
     def __init__(self, file:str, duration:str):
         super().__init__()
+        self.timer = QTimer()
         self.data = Data()
         self.file = file
         self.duration = duration
@@ -321,7 +334,7 @@ class ConvertWorker(QObject):
 
         new_name = self.data.get('output') + self.file[self.file.rfind('/'):self.file.rfind('.')] + "_converted" + ".mp4"
         if os.path.isfile(new_name):
-            i = 0
+            i = 1
             while os.path.isfile(self.data.get('output') + self.file[self.file.rfind('/'):self.file.rfind('.')] + f"_converted-{i}" + ".mp4"):
                 i += 1
             new_name = self.data.get('output') + self.file[self.file.rfind('/'):self.file.rfind('.')] + f"_converted-{i}" + ".mp4"
@@ -341,7 +354,7 @@ class ConvertWorker(QObject):
                         fps = fps.group(0)[4:fps.group(0).find('q')-1].strip()
                         elapsed = elapsed.group(0)[8:]
                         self.info_signal.emit(f"fps: {fps}      elapsed: {elapsed}")
-                    print(line)
+                    # print(line)
                 break
             except UnicodeDecodeError:
                 continue
